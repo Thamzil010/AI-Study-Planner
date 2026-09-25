@@ -1,5 +1,5 @@
 // OpenRouter AI Service
-const MODEL = 'nvidia/nemotron-3-ultra-550b-a55b:free'; // free openrouter model
+const MODEL = 'google/gemma-2-9b-it:free'; // free openrouter model
 
 export const generateWithAI = async (prompt: string, model: string = MODEL): Promise<string> => {
     if (!process.env.OPENROUTER_API_KEY) {

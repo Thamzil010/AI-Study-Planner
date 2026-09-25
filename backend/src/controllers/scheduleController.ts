@@ -178,7 +178,7 @@ export const generateSchedule = async (req: Request, res: Response) => {
     })))}
 
     Rules (ADAPTIVE SCHEDULING):
-    1. STRICTLY schedule within the Study Window.
+    1. STRICTLY schedule within the Study Window. The FIRST session MUST start EXACTLY at the Study Window start time (${payload.studyStartTime || '08:00'}).
     2. If Working Hours exist, DO NOT schedule ANY sessions (study or break) between those hours.
     3. Weave in short breaks (10-15 mins) between study sessions.
     4. Missed homework MUST be scheduled first.
