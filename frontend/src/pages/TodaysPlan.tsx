@@ -458,9 +458,9 @@ const TodaysPlan = () => {
                           <div className="w-full md:w-36 flex-shrink-0 flex items-center md:items-start gap-2 text-gray-500 mb-3 md:mb-0 pt-1">
                             <Clock size={18} className={isBreak ? 'text-orange-400' : 'text-blue-500'} />
                             <div className="font-medium text-lg">
-                              {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}
                               <div className="text-sm text-gray-400 hidden md:block mt-0.5">
-                                to {new Date(session.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                to {new Date(session.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}
                               </div>
                             </div>
                           </div>
