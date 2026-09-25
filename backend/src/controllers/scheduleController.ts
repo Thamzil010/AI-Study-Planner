@@ -301,10 +301,17 @@ export const generateResourcesForTopic = async (subjectId: string, topic: string
      rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
      const resources = JSON.parse(rawText);
      for (const r of resources) {
+        let safeUrl = r.url;
+        // AI models often hallucinate exact YouTube video IDs. 
+        // Convert to a YouTube search query to guarantee it always works.
+        if (r.type === 'YOUTUBE' || (safeUrl && (safeUrl.includes('youtube.com/watch') || safeUrl.includes('youtu.be')))) {
+           safeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(topic + " " + r.title)}`;
+        }
+        
         await prisma.resource.create({
            data: {
              title: r.title,
-             url: r.url,
+             url: safeUrl,
              type: r.type || 'COURSE',
              subjectId
            }
