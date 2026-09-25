@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: ai_study_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_study_planner
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai_study_redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+
+  # backend:
+  #   build: ./backend
+  #   container_name: ai_study_backend
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ai_study_planner?schema=public
+  #     - REDIS_URL=redis://redis:6379
+  #     - PORT=5000
+  #     - JWT_SECRET=your_jwt_secret_key_here
+  #   depends_on:
+  #     - postgres
+  #     - redis
+
+  # frontend:
+  #   build: ./frontend
+  #   container_name: ai_study_frontend
+  #   ports:
+  #     - "80:80"
+  #   depends_on:
+  #     - backend
+
+volumes:
+  postgres_data:
+  redis_data:

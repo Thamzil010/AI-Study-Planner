@@ -1,0 +1,24 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+@media print { aside { display: none !important; } #report-actions { display: none !important; } main { width: 100% !important; margin: 0 !important; padding: 0 !important; } @page { margin: 1cm; } }
+
+@media print {
+  aside { display: none !important; }
+  #report-actions { display: none !important; }
+  main { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+  @page { margin: 1cm; }
+}

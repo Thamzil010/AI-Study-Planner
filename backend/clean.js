@@ -1,0 +1,18 @@
+const fs = require('fs');
+const path = require('path');
+const p = path.join(process.cwd(), 'src/controllers/quizController.ts');
+const lines = fs.readFileSync(p, 'utf8').split('\n');
+const cleanLines = lines.slice(0, 328);
+cleanLines.push('export const getQuizzes = async (req: Request, res: Response) => {');
+cleanLines.push('  try {');
+cleanLines.push('    const userId = (req as any).user.id;');
+cleanLines.push('    const quizzes = await prisma.quiz.findMany({');
+cleanLines.push('      where: { userId },');
+cleanLines.push('      orderBy: { createdAt: "desc" }');
+cleanLines.push('    });');
+cleanLines.push('    res.json(quizzes);');
+cleanLines.push('  } catch (e) {');
+cleanLines.push('    res.status(500).json({ error: "Failed" });');
+cleanLines.push('  }');
+cleanLines.push('};');
+fs.writeFileSync(p, cleanLines.join('\n'), 'utf8');

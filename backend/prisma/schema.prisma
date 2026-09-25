@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum Difficulty {
+  HARD
+  MEDIUM
+  EASY
+}
+
+model User {
+  id             String    @id @default(uuid())
+  name           String
+  email          String    @unique
+  password       String
+  role           Role      @default(STUDENT)
+  department     String?
+  semester       Int?
+  dailyStudyHours Int?     @default(4)
+  workingHours   Int?      @default(0)
+  
+  studyStartTime String?   @default("08:00")
+  studyEndTime   String?   @default("22:00")
+  hasWorkingHours Boolean  @default(false)
+  workStartTime  String?
+  workEndTime    String?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  subjects       Subject[]
+  schedules      StudySchedule[]
+  progress       Progress[]
+  notifications  Notification[]
+  examScores     ExamScore[]
+  reports        Report[]
+  quizzes        Quiz[]
+}
+
+model Subject {
+  id               String    @id @default(uuid())
+  name             String
+  priority         Int       @default(5)
+  difficulty       Difficulty @default(MEDIUM)
+  completionRate   Float     @default(0.0) // 0 to 100
+  topic            String?
+  estimatedStudyHours Float? @default(0.0)
+  
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  sessions         StudySession[]
+  resources        Resource[]
+  progresses       Progress[]
+  examScores       ExamScore[]
+  quizzes          Quiz[]
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model StudySchedule {
+  id             String    @id @default(uuid())
+  date           DateTime
+  isCompleted    Boolean   @default(false)
+  
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  sessions       StudySession[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model StudySession {
+  id               String    @id @default(uuid())
+  startTime        DateTime
+  endTime          DateTime
+  durationMinutes  Int
+  type             String    @default("STUDY") // STUDY, REVISION, BREAK
+
+  scheduleId       String
+  schedule         StudySchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  
+  subjectId        String?
+  subject          Subject?      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  status           String        @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  
+  topic            String?
+  isHomework       Boolean       @default(false)
+  actualDuration   Int?
+}
+
+model Resource {
+  id             String    @id @default(uuid())
+  title          String
+  url            String?
+  type           String    // BOOK, YOUTUBE, PDF, COURSE, PAPER
+  
+  subjectId      String
+  subject        Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+model Progress {
+  id             String    @id @default(uuid())
+  date           DateTime  @default(now())
+  hoursStudied   Float
+  
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  subjectId      String
+  subject        Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id             String    @id @default(uuid())
+  message        String
+  isRead         Boolean   @default(false)
+  
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime  @default(now())
+}
+
+model ExamScore {
+  id             String    @id @default(uuid())
+  score          Float
+  maxScore       Float     @default(100.0)
+  
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  subjectId      String
+  subject        Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  
+  date           DateTime  @default(now())
+}
+
+model Report {
+  id             String    @id @default(uuid())
+  type           String    // WEEKLY, MONTHLY, EXAM_READINESS
+  contentUrl     String?   // URL to a generated PDF or similar
+  
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime  @default(now())
+}
+
+model Quiz {
+  id             String    @id @default(uuid())
+  topic          String
+  score          Float?
+  totalQuestions Int
+  completed      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  subjectId      String
+  subject        Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  
+  feedback       String?
+  weakAreas      String[]
+  strongAreas    String[]
+  suggestions    String[]
+
+  questions      QuizQuestion[]
+}
+
+model QuizQuestion {
+  id             String    @id @default(uuid())
+  question       String
+  options        String[]  
+  correctAnswer  String
+  userAnswer     String?
+  explanation    String?
+  
+  quizId         String
+  quiz           Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
