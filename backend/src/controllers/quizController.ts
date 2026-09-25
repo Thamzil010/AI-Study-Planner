@@ -35,7 +35,14 @@ export const generateQuizCore = async (subjectId: string, userId: string) => {
   try {
     let rawText = await generateWithAI(prompt);
     
-    rawText = rawText.replace(/\`\`\`json\n?/g, '').replace(/\`\`\`\n?/g, '').trim();
+    // Extract JSON array using regex in case the model is chatty
+    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      rawText = jsonMatch[0];
+    } else {
+      rawText = rawText.replace(/\`\`\`json\n?/g, '').replace(/\`\`\`\n?/g, '').trim();
+    }
+    
     questionsData = JSON.parse(rawText);
     if (!Array.isArray(questionsData) || questionsData.length === 0) {
       throw new Error('Parsed AI response is empty or invalid array');

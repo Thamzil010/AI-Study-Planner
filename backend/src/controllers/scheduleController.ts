@@ -219,7 +219,12 @@ export const generateSchedule = async (req: Request, res: Response) => {
     while (retries > 0) {
       try {
         let rawText = await generateWithAI(prompt);
-        rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          rawText = jsonMatch[0];
+        } else {
+          rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        }
         const parsed = JSON.parse(rawText);
         sessionData = parsed.map((s: any) => ({
           ...s,
