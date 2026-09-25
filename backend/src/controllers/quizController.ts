@@ -287,7 +287,6 @@ export const submitQuiz = async (req: Request, res: Response) => {
       message: progressMessage,
       feedback: aiFeedback,
       weakAreas,
-      weakAreas,
       strongAreas,
       suggestions,
       masteryPercentage: newMastery,
