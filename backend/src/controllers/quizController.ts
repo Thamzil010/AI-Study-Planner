@@ -31,30 +31,41 @@ export const generateQuizCore = async (subjectId: string, userId: string) => {
   `;
 
   let questionsData: any[] = [];
-  
-  try {
-    let rawText = await generateWithAI(prompt);
-    
-    // Extract JSON array using regex in case the model is chatty
-    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      rawText = jsonMatch[0];
-    } else {
-      rawText = rawText.replace(/\`\`\`json\n?/g, '').replace(/\`\`\`\n?/g, '').trim();
+  let retries = 3;
+  let delay = 1000;
+
+  while (retries > 0) {
+    try {
+      let rawText = await generateWithAI(prompt);
+      
+      // Extract JSON array using regex in case the model is chatty
+      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        rawText = jsonMatch[0];
+      } else {
+        rawText = rawText.replace(/\`\`\`json\n?/g, '').replace(/\`\`\`\n?/g, '').trim();
+      }
+      
+      questionsData = JSON.parse(rawText);
+      if (!Array.isArray(questionsData) || questionsData.length === 0) {
+        throw new Error('Parsed AI response is empty or invalid array');
+      }
+      break; // Success, exit retry loop
+    } catch (aiError) {
+      console.warn(`AI Quiz Generation Failed (Retries left: ${retries - 1}):`, aiError);
+      retries--;
+      if (retries === 0) {
+        questionsData = Array.from({ length: 10 }).map((_, i) => ({
+          question: `Understanding ${subject.topic}: Which of the following is correct? (Question ${i + 1})`,
+          options: ['Option A (Correct)', 'Option B', 'Option C', 'Option D'],
+          correctAnswer: 'Option A (Correct)',
+          explanation: `This is a fallback explanation since the AI service is currently unavailable.`
+        }));
+      } else {
+        await new Promise(res => setTimeout(res, delay));
+        delay *= 2; // Exponential backoff
+      }
     }
-    
-    questionsData = JSON.parse(rawText);
-    if (!Array.isArray(questionsData) || questionsData.length === 0) {
-      throw new Error('Parsed AI response is empty or invalid array');
-    }
-  } catch (aiError) {
-    console.warn('AI Quiz Generation Failed, using fallback:', aiError);
-    questionsData = Array.from({ length: 10 }).map((_, i) => ({
-      question: `Understanding ${subject.topic}: Which of the following is correct? (Question ${i + 1})`,
-      options: ['Option A (Correct)', 'Option B', 'Option C', 'Option D'],
-      correctAnswer: 'Option A (Correct)',
-      explanation: `This is a fallback explanation since the AI service is currently unavailable.`
-    }));
   }
 
   const quiz = await prisma.quiz.create({
@@ -145,7 +156,7 @@ export const submitQuiz = async (req: Request, res: Response) => {
       `;
 
       let rawText = await generateWithAI(prompt);
-      rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      rawText = rawText.replace(/\`\`\`json\n?/g, '').replace(/\`\`\`\n?/g, '').trim();
       const parsed = JSON.parse(rawText);
       aiFeedback = parsed.feedback || aiFeedback;
       weakAreas = parsed.weakAreas || [];
@@ -275,6 +286,7 @@ export const submitQuiz = async (req: Request, res: Response) => {
       totalQuestions: quiz.totalQuestions,
       message: progressMessage,
       feedback: aiFeedback,
+      weakAreas,
       weakAreas,
       strongAreas,
       suggestions,
