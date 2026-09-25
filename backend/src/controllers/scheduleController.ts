@@ -302,15 +302,22 @@ export const generateResourcesForTopic = async (subjectId: string, topic: string
      const resources = JSON.parse(rawText);
      for (const r of resources) {
         let safeUrl = r.url;
-        // AI models often hallucinate exact YouTube video IDs. 
-        // Convert to a YouTube search query to guarantee it always works.
+        
+        // AI models (especially smaller free ones) hallucinate exact URLs. 
+        // Convert EVERYTHING to search queries to guarantee they always work and are relevant.
+        const cleanTitle = (r.title || "").replace(/_/g, ' ');
+        const cleanTopic = (topic || "").replace(/_/g, ' ');
+        const searchQuery = encodeURIComponent(`${cleanTopic} ${cleanTitle}`);
+        
         if (r.type === 'YOUTUBE' || (safeUrl && (safeUrl.includes('youtube.com/watch') || safeUrl.includes('youtu.be')))) {
-           safeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(topic + " " + r.title)}`;
+           safeUrl = `https://www.youtube.com/results?search_query=${searchQuery}`;
+        } else {
+           safeUrl = `https://www.google.com/search?q=${searchQuery}`;
         }
         
         await prisma.resource.create({
            data: {
-             title: r.title,
+             title: cleanTitle,
              url: safeUrl,
              type: r.type || 'COURSE',
              subjectId
