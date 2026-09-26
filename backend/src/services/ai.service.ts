@@ -1,34 +1,23 @@
-// OpenRouter AI Service
-const MODEL = 'liquid/lfm-2.5-2.6b:free'; // free openrouter model
+import { GoogleGenAI } from '@google/genai';
+
+const MODEL = 'gemini-flash-latest';
 
 export const generateWithAI = async (prompt: string, model: string = MODEL): Promise<string> => {
-    if (!process.env.OPENROUTER_API_KEY) {
-        throw new Error("OPENROUTER_API_KEY is not defined in .env");
+    if (!process.env.GEMINI_API_KEY) {
+        throw new Error("GEMINI_API_KEY is not defined in .env");
     }
 
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
     try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: model,
-                messages: [{ role: "user", content: prompt }]
-            })
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: prompt,
         });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            console.error("OpenRouter API Error Details:", JSON.stringify(data, null, 2));
-            throw new Error(data.error?.message || `OpenRouter API failed with status ${response.status}`);
-        }
-
-        return data.choices?.[0]?.message?.content || '';
+        return response.text || '';
     } catch (error) {
-        console.error("Failed to generate content with OpenRouter:", error);
+        console.error("Failed to generate content with Gemini:", error);
         throw error; // Re-throw to be handled by controllers
     }
 }
@@ -59,7 +48,7 @@ export const generateScheduleWithAI = async (preferences: any, subjects: any[]) 
     const text = await generateWithAI(prompt);
     
     // strip markdown if any
-    let cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    let cleanText = text.replace(/\`\`\`json\n?/g, '').replace(/\`\`\`\n?/g, '').trim();
     return JSON.parse(cleanText);
   } catch (error) {
     console.error("AI Schedule Generation Error:", error);

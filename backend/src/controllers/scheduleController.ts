@@ -261,10 +261,10 @@ export const generateSchedule = async (req: Request, res: Response) => {
       const [endH, endM] = session.endTime.split(':').map(Number);
       
       const startTime = new Date(scheduleDate);
-      startTime.setHours(startH, startM, 0, 0);
+      startTime.setUTCHours(startH, startM, 0, 0);
       
       const endTime = new Date(scheduleDate);
-      endTime.setHours(endH, endM, 0, 0);
+      endTime.setUTCHours(endH, endM, 0, 0);
 
       return {
         scheduleId: schedule.id,
