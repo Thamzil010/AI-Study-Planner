@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 
 const MODEL = 'gemini-flash-latest';
 
-export const generateWithAI = async (prompt: string, model: string = MODEL): Promise<string> => {
+export const generateWithAI = async (prompt: string, model: string = MODEL, expectJson: boolean = false): Promise<string> => {
     if (!process.env.GEMINI_API_KEY) {
         throw new Error("GEMINI_API_KEY is not defined in .env");
     }
@@ -13,6 +13,7 @@ export const generateWithAI = async (prompt: string, model: string = MODEL): Pro
         const response = await ai.models.generateContent({
             model: model,
             contents: prompt,
+            config: expectJson ? { responseMimeType: "application/json" } : undefined,
         });
 
         return response.text || '';
@@ -45,11 +46,8 @@ export const generateScheduleWithAI = async (preferences: any, subjects: any[]) 
   `;
 
   try {
-    const text = await generateWithAI(prompt);
-    
-    // strip markdown if any
-    let cleanText = text.replace(/\`\`\`json\n?/g, '').replace(/\`\`\`\n?/g, '').trim();
-    return JSON.parse(cleanText);
+    const text = await generateWithAI(prompt, 'gemini-flash-latest', true);
+    return JSON.parse(text);
   } catch (error) {
     console.error("AI Schedule Generation Error:", error);
     throw error;

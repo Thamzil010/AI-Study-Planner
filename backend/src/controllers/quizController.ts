@@ -36,15 +36,7 @@ export const generateQuizCore = async (subjectId: string, userId: string) => {
 
   while (retries > 0) {
     try {
-      let rawText = await generateWithAI(prompt);
-      
-      // Extract JSON array using regex in case the model is chatty
-      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        rawText = jsonMatch[0];
-      } else {
-        rawText = rawText.replace(/\`\`\`json\n?/g, '').replace(/\`\`\`\n?/g, '').trim();
-      }
+      let rawText = await generateWithAI(prompt, 'gemini-flash-latest', true);
       
       questionsData = JSON.parse(rawText);
       if (!Array.isArray(questionsData) || questionsData.length === 0) {
@@ -155,8 +147,7 @@ export const submitQuiz = async (req: Request, res: Response) => {
       - "suggestions": Array of strings providing actionable study tips for their weak areas.
       `;
 
-      let rawText = await generateWithAI(prompt);
-      rawText = rawText.replace(/\`\`\`json\n?/g, '').replace(/\`\`\`\n?/g, '').trim();
+      let rawText = await generateWithAI(prompt, 'gemini-flash-latest', true);
       const parsed = JSON.parse(rawText);
       aiFeedback = parsed.feedback || aiFeedback;
       weakAreas = parsed.weakAreas || [];
