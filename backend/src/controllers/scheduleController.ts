@@ -218,7 +218,7 @@ export const generateSchedule = async (req: Request, res: Response) => {
 
     while (retries > 0) {
       try {
-        let rawText = await generateWithAI(prompt, 'gemini-2.5-flash', true);
+        let rawText = await generateWithAI(prompt, 'gemini-flash-lite-latest', true);
         const parsed = JSON.parse(rawText);
         sessionData = parsed.map((s: any) => ({
           ...s,
@@ -291,7 +291,7 @@ export const generateResourcesForTopic = async (subjectId: string, topic: string
   - 1 Practice website
   Return ONLY JSON format: [{ "title": "Resource Name", "url": "https://example.com", "type": "YOUTUBE|ARTICLE|DOCUMENTATION|PRACTICE" }]`;
   try {
-      let rawText = await generateWithAI(prompt, 'gemini-2.5-flash', true);
+      let rawText = await generateWithAI(prompt, 'gemini-flash-lite-latest', true);
      const resources = JSON.parse(rawText);
      for (const r of resources) {
         let safeUrl = r.url;

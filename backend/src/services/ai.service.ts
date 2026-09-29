@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 
-const MODEL = 'gemini-2.5-flash';
+const MODEL = 'gemini-flash-lite-latest';
 
 export const generateWithAI = async (prompt: string, model: string = MODEL, expectJson: boolean = false): Promise<string> => {
     if (!process.env.GEMINI_API_KEY) {
@@ -46,7 +46,7 @@ export const generateScheduleWithAI = async (preferences: any, subjects: any[]) 
   `;
 
   try {
-    const text = await generateWithAI(prompt, 'gemini-2.5-flash', true);
+    const text = await generateWithAI(prompt, 'gemini-flash-lite-latest', true);
     return JSON.parse(text);
   } catch (error) {
     console.error("AI Schedule Generation Error:", error);

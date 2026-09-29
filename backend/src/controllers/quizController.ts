@@ -36,7 +36,7 @@ export const generateQuizCore = async (subjectId: string, userId: string) => {
 
   while (retries > 0) {
     try {
-      let rawText = await generateWithAI(prompt, 'gemini-2.5-flash', true);
+      let rawText = await generateWithAI(prompt, 'gemini-flash-lite-latest', true);
       
       questionsData = JSON.parse(rawText);
       if (!Array.isArray(questionsData) || questionsData.length === 0) {
@@ -147,7 +147,7 @@ export const submitQuiz = async (req: Request, res: Response) => {
       - "suggestions": Array of strings providing actionable study tips for their weak areas.
       `;
 
-      let rawText = await generateWithAI(prompt, 'gemini-2.5-flash', true);
+      let rawText = await generateWithAI(prompt, 'gemini-flash-lite-latest', true);
       const parsed = JSON.parse(rawText);
       aiFeedback = parsed.feedback || aiFeedback;
       weakAreas = parsed.weakAreas || [];
