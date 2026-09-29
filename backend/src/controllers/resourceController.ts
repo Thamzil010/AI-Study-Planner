@@ -37,7 +37,7 @@ export const getResourcesForTopic = async (req: Request, res: Response) => {
     `;
 
     try {
-      let rawText = await generateWithAI(prompt, 'gemini-flash-latest', true);
+      let rawText = await generateWithAI(prompt, 'gemini-2.5-flash', true);
       const resources = JSON.parse(rawText);
       res.json(resources);
     } catch (error) {
