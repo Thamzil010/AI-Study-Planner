@@ -25,7 +25,7 @@ export const getResourcesForTopic = async (req: Request, res: Response) => {
     Difficulty: ${subject.difficulty}
 
     Please recommend exactly:
-    - 3 YouTube videos
+    - 1 YouTube video
     - 2 Articles
     - 1 PDF Notes link
 
@@ -72,8 +72,6 @@ export const getResourcesForTopic = async (req: Request, res: Response) => {
       const topicQuery = encodeURIComponent(`${subject.name} ${subject.topic}`);
       const fallbackResources = [
         { title: `${subject.topic} - Full Tutorial`, type: 'YOUTUBE', url: `https://www.youtube.com/results?search_query=${topicQuery}` },
-        { title: `${subject.topic} - In 5 Minutes`, type: 'YOUTUBE', url: `https://www.youtube.com/results?search_query=${topicQuery}+in+5+minutes` },
-        { title: `${subject.topic} - Practice Questions`, type: 'YOUTUBE', url: `https://www.youtube.com/results?search_query=${topicQuery}+questions+and+answers` },
         { title: `Read about ${subject.topic} on GeeksforGeeks`, type: 'ARTICLE', url: `https://www.geeksforgeeks.org/search/?q=${topicQuery}` },
         { title: `Read about ${subject.topic} on W3Schools/MDN`, type: 'ARTICLE', url: `https://www.google.com/search?q=${topicQuery}+tutorial+w3schools+OR+mdn` },
         { title: `${subject.topic} Cheatsheet / PDF Notes`, type: 'PDF', url: `https://www.google.com/search?q=${topicQuery}+filetype:pdf` }

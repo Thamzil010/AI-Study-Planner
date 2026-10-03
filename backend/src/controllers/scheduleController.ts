@@ -306,8 +306,8 @@ export const generateSchedule = async (req: Request, res: Response) => {
 };
 
 export const generateResourcesForTopic = async (subjectId: string, topic: string) => {
-  const prompt = `Suggest exactly 5 high-quality learning resources for the topic "${topic}":
-  - 2 YouTube videos
+  const prompt = `Suggest exactly 4 high-quality learning resources for the topic "${topic}":
+  - 1 YouTube video
   - 1 Article
   - 1 Documentation or Notes
   - 1 Practice website
