@@ -42,9 +42,17 @@ export const getResourcesForTopic = async (req: Request, res: Response) => {
       
       resources = resources.map((r: any) => {
         const t = r.type?.toUpperCase() || '';
-        if (t.includes('PDF')) r.type = 'PDF';
-        else if (t.includes('YOUTUBE') || t.includes('VIDEO')) r.type = 'YOUTUBE';
-        else if (t.includes('ARTICLE')) r.type = 'ARTICLE';
+        if (t.includes('PDF')) {
+          r.type = 'PDF';
+          // OVERRIDE the AI's generated URL to completely prevent AI hallucinations (like "osimov" instead of "osi")
+          r.url = `https://www.google.com/search?q=${encodeURIComponent(subject.name + ' ' + subject.topic)}+filetype:pdf`;
+        }
+        else if (t.includes('YOUTUBE') || t.includes('VIDEO')) {
+          r.type = 'YOUTUBE';
+        }
+        else if (t.includes('ARTICLE')) {
+          r.type = 'ARTICLE';
+        }
         return r;
       });
 
