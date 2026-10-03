@@ -16,11 +16,19 @@ function formatYoutubeDuration(duration: string) {
   return result;
 }
 
-const getYoutubeVideos = async (query: string) => {
+const getYoutubeVideos = async (rawTopic: string) => {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return null;
 
-  const cacheKey = `${query}_v5_highest_views_2_vids`;
+  // 1. Clean up the generic words from the topic
+  const genericWords = ['review', 'revision', 'study', 'learn', 'preparation', 'tutorial', 'educational'];
+  let cleanTopic = rawTopic.toLowerCase();
+  for (const word of genericWords) {
+    cleanTopic = cleanTopic.replace(new RegExp(`\\b${word}\\b`, 'gi'), '');
+  }
+  cleanTopic = cleanTopic.replace(/\s+/g, ' ').trim() || rawTopic;
+
+  const cacheKey = `${cleanTopic}_v6_exact_relevance_views`;
   try {
     const cached = await prisma.youtubeCache.findUnique({ where: { topic: cacheKey } });
     if (cached) return JSON.parse(cached.data);
@@ -28,32 +36,39 @@ const getYoutubeVideos = async (query: string) => {
     console.error("Cache read error", e);
   }
 
+  console.log(`\n=== YOUTUBE RECOMMENDATION REQUEST ===`);
+  console.log(`Raw Topic: "${rawTopic}"`);
+  console.log(`Clean Topic: "${cleanTopic}"`);
+
   try {
-    // 1. Search for English Videos
-    const enSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=10&relevanceLanguage=en&key=${apiKey}`);
+    // 2. Search for English Videos
+    const enSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanTopic)}&type=video&maxResults=10&relevanceLanguage=en&key=${apiKey}`);
     const enSearchData = await enSearchRes.json();
     
-    // 2. Search for Tamil Videos
-    const baseQuery = query.replace(' educational tutorial', '').trim();
-    const taSearchQuery = `${baseQuery} தமிழில் | ${baseQuery} தமிழ் விளக்கம் | ${baseQuery} Tamil explanation`;
+    // 3. Search for Tamil Videos
+    const taSearchQuery = `${cleanTopic} தமிழில் | ${cleanTopic} தமிழ் விளக்கம் | ${cleanTopic} Tamil explanation | ${cleanTopic} Tamil tutorial`;
+    console.log(`Tamil Query: "${taSearchQuery}"`);
     const taSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(taSearchQuery)}&type=video&maxResults=15&relevanceLanguage=ta&key=${apiKey}`);
     const taSearchData = await taSearchRes.json();
 
-    // 3. Extract all unique IDs
+    // 4. Extract all unique IDs
     const enIds = (enSearchData.items || []).map((i: any) => i.id.videoId).filter(Boolean);
     const taIds = (taSearchData.items || []).map((i: any) => i.id.videoId).filter(Boolean);
     const allIds = Array.from(new Set([...enIds, ...taIds])).slice(0, 50); // Max 50 per request
 
-    if (allIds.length === 0) return null;
+    if (allIds.length === 0) {
+      console.log("No videos found from search.");
+      return null;
+    }
 
-    // 4. Batch fetch metadata and statistics for all videos
+    // 5. Batch fetch metadata and statistics for all videos
     const videoRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${allIds.join(',')}&key=${apiKey}`);
     const videoData = await videoRes.json();
     
     if (!videoData.items) return null;
 
-    // Helper to evaluate text
-    const validateVideo = (item: any, isTargetTamil: boolean) => {
+    // Helper to evaluate language
+    const checkLanguage = (item: any, isTargetTamil: boolean) => {
       const audioLang = (item.snippet.defaultAudioLanguage || "").toLowerCase();
       const defaultLang = (item.snippet.defaultLanguage || "").toLowerCase();
       const title = item.snippet.title || "";
@@ -61,31 +76,83 @@ const getYoutubeVideos = async (query: string) => {
       const combinedText = (title + " " + desc).toLowerCase();
       
       const isHindi = /hindi|[\u0900-\u097F]/.test(combinedText) || audioLang.startsWith('hi') || defaultLang.startsWith('hi');
-      if (isHindi) return false;
+      if (isHindi) return { isValid: false, reason: "Detected Hindi" };
 
       if (isTargetTamil) {
         const hasTamilMetadata = audioLang.startsWith('ta') || defaultLang.startsWith('ta');
         const hasTamilScript = /[\u0B80-\u0BFF]/.test(combinedText);
-        return hasTamilMetadata || hasTamilScript;
+        if (hasTamilMetadata || hasTamilScript) return { isValid: true };
+        return { isValid: false, reason: "Missing Tamil Metadata/Script" };
       }
-      return true; // English usually doesn't need strict validation beyond filtering out Hindi
+      return { isValid: true }; // English usually doesn't need strict validation beyond filtering out Hindi
     };
 
-    // 5. Filter and sort English videos
+    const getRelevanceScore = (item: any, topic: string) => {
+      const title = (item.snippet.title || "").toLowerCase().replace(/-/g, ' ');
+      const desc = (item.snippet.description || "").toLowerCase().replace(/-/g, ' ');
+      const combinedText = title + " " + desc;
+
+      const normalizedTopic = topic.toLowerCase().replace(/-/g, ' ').replace(/doubly/g, 'double').replace(/arrays/g, 'array');
+      const normalizedTitle = title.replace(/doubly/g, 'double').replace(/arrays/g, 'array');
+      const normalizedDesc = desc.replace(/doubly/g, 'double').replace(/arrays/g, 'array');
+      const normalizedCombined = combinedText.replace(/doubly/g, 'double').replace(/arrays/g, 'array');
+
+      if (normalizedTitle.includes(normalizedTopic)) return 3; // Exact phrase match in title
+      if (normalizedDesc.includes(normalizedTopic)) return 2;  // Exact phrase match in desc
+
+      const words = normalizedTopic.split(/\s+/).filter(w => w.length > 2);
+      if (words.length === 0) return 3; // No valid words to filter by
+
+      let matchCount = 0;
+      for (const word of words) {
+        if (normalizedCombined.includes(word)) matchCount++;
+      }
+
+      if (matchCount === words.length) return 1; // Contains all keywords
+      return 0; // Misses keywords (irrelevant)
+    };
+
+    console.log(`\n--- Evaluating English Candidates ---`);
     const validEnVideos = videoData.items
-      .filter((item: any) => enIds.includes(item.id) && validateVideo(item, false))
-      .sort((a: any, b: any) => (parseInt(b.statistics.viewCount) || 0) - (parseInt(a.statistics.viewCount) || 0));
+      .filter((item: any) => enIds.includes(item.id))
+      .map((item: any) => {
+        const langCheck = checkLanguage(item, false);
+        const relevance = getRelevanceScore(item, cleanTopic);
+        const views = parseInt(item.statistics.viewCount) || 0;
+        console.log(`[EN] ${item.snippet.title} | Rel: ${relevance} | Lang OK: ${langCheck.isValid} | Views: ${views}`);
+        return { item, langCheck, relevance, views };
+      })
+      .filter((v: any) => v.langCheck.isValid && v.relevance > 0)
+      .sort((a: any, b: any) => {
+        if (a.relevance !== b.relevance) return b.relevance - a.relevance;
+        return b.views - a.views;
+      });
     
-    const selectedEnVideo = validEnVideos.length > 0 ? validEnVideos[0] : null;
+    const selectedEnVideo = validEnVideos.length > 0 ? validEnVideos[0].item : null;
 
-    // 6. Filter and sort Tamil videos (exclude the selected English video if it somehow overlapped)
+    console.log(`\n--- Evaluating Tamil Candidates ---`);
     const validTaVideos = videoData.items
-      .filter((item: any) => taIds.includes(item.id) && item.id !== selectedEnVideo?.id && validateVideo(item, true))
-      .sort((a: any, b: any) => (parseInt(b.statistics.viewCount) || 0) - (parseInt(a.statistics.viewCount) || 0));
+      .filter((item: any) => taIds.includes(item.id) && item.id !== selectedEnVideo?.id)
+      .map((item: any) => {
+        const langCheck = checkLanguage(item, true);
+        const relevance = getRelevanceScore(item, cleanTopic);
+        const views = parseInt(item.statistics.viewCount) || 0;
+        console.log(`[TA] ${item.snippet.title} | Rel: ${relevance} | Lang OK: ${langCheck.isValid} (${langCheck.reason || 'Yes'}) | Views: ${views}`);
+        return { item, langCheck, relevance, views };
+      })
+      .filter((v: any) => v.langCheck.isValid && v.relevance > 0)
+      .sort((a: any, b: any) => {
+        if (a.relevance !== b.relevance) return b.relevance - a.relevance;
+        return b.views - a.views;
+      });
 
-    const selectedTaVideo = validTaVideos.length > 0 ? validTaVideos[0] : null;
+    const selectedTaVideo = validTaVideos.length > 0 ? validTaVideos[0].item : null;
 
-    // 7. Format exactly 2 videos
+    console.log(`\n--- Final Selection ---`);
+    console.log(`English: ${selectedEnVideo ? selectedEnVideo.snippet.title : 'None'}`);
+    console.log(`Tamil: ${selectedTaVideo ? selectedTaVideo.snippet.title : 'None'}\n`);
+
+    // 6. Format exactly 2 videos
     const finalItems = [
       selectedEnVideo ? { ...selectedEnVideo, _mappedType: 'YOUTUBE_ENGLISH' } : null,
       selectedTaVideo ? { ...selectedTaVideo, _mappedType: 'YOUTUBE_TAMIL' } : null
@@ -172,7 +239,7 @@ export const getResourcesForTopic = async (req: Request, res: Response) => {
       });
       
       const topicQuery = `${subject.name} ${subject.topic}`;
-      const youtubeVideos = await getYoutubeVideos(topicQuery + ' educational tutorial');
+      const youtubeVideos = await getYoutubeVideos(subject.topic);
       if (youtubeVideos) {
         resources = [...youtubeVideos, ...resources];
       } else {
@@ -204,7 +271,7 @@ export const getResourcesForTopic = async (req: Request, res: Response) => {
         { title: `${subject.topic} Cheatsheet / PDF Notes`, type: 'PDF', url: `https://www.google.com/search?q=${topicQuery}+filetype:pdf` }
       ];
       
-      const youtubeVideos = await getYoutubeVideos(topicQueryStr + ' educational tutorial');
+      const youtubeVideos = await getYoutubeVideos(subject.topic);
       if (youtubeVideos) {
         fallbackResources = [...youtubeVideos, ...fallbackResources];
       } else {
