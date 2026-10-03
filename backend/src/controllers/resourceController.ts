@@ -20,35 +20,71 @@ const getYoutubeVideos = async (query: string) => {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return null;
 
+  const cacheKey = `${query}_both_langs_4_vids`;
   try {
-    const cached = await prisma.youtubeCache.findUnique({ where: { topic: query } });
+    const cached = await prisma.youtubeCache.findUnique({ where: { topic: cacheKey } });
     if (cached) return JSON.parse(cached.data);
   } catch (e) {
     console.error("Cache read error", e);
   }
 
   try {
-    const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=3&key=${apiKey}`);
-    const searchData = await searchRes.json();
-    if (!searchData.items || searchData.items.length === 0) return null;
+    // English Search
+    const enSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=3&relevanceLanguage=en&key=${apiKey}`);
+    const enSearchData = await enSearchRes.json();
+    
+    // Tamil Search
+    const taSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query + ' in tamil')}&type=video&maxResults=3&relevanceLanguage=ta&key=${apiKey}`);
+    const taSearchData = await taSearchRes.json();
 
-    const videoIds = searchData.items.map((item: any) => item.id.videoId).join(',');
+    const seenIds = new Set();
+    
+    let enItems: any[] = [];
+    if (enSearchData.items) {
+      for (const item of enSearchData.items) {
+        if (!seenIds.has(item.id.videoId) && enItems.length < 2) {
+          seenIds.add(item.id.videoId);
+          enItems.push(item);
+        }
+      }
+    }
+
+    let taItems: any[] = [];
+    if (taSearchData.items) {
+      for (const item of taSearchData.items) {
+        if (!seenIds.has(item.id.videoId) && taItems.length < 2) {
+          seenIds.add(item.id.videoId);
+          taItems.push(item);
+        }
+      }
+    }
+
+    const finalItems = [...enItems, ...taItems];
+    if (finalItems.length === 0) return null;
+
+    const videoIds = finalItems.map((item: any) => item.id.videoId).join(',');
     const videoRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${videoIds}&key=${apiKey}`);
     const videoData = await videoRes.json();
 
-    const formattedVideos = videoData.items.map((item: any) => ({
-      title: item.snippet.title,
-      type: 'YOUTUBE_RICH',
-      url: `https://www.youtube.com/watch?v=${item.id}`,
-      thumbnail: item.snippet.thumbnails.medium.url,
-      channelName: item.snippet.channelTitle,
-      viewCount: item.statistics.viewCount,
-      duration: formatYoutubeDuration(item.contentDetails.duration)
-    }));
+    const formattedVideos = finalItems.map(searchItem => {
+      const detail = videoData.items?.find((v: any) => v.id === searchItem.id.videoId);
+      if (!detail) return null;
+      const isTamil = taItems.some(ti => ti.id.videoId === searchItem.id.videoId);
+      
+      return {
+        title: detail.snippet.title,
+        type: isTamil ? 'YOUTUBE_TAMIL' : 'YOUTUBE_ENGLISH',
+        url: `https://www.youtube.com/watch?v=${detail.id}`,
+        thumbnail: detail.snippet.thumbnails.medium.url,
+        channelName: detail.snippet.channelTitle,
+        viewCount: detail.statistics.viewCount,
+        duration: formatYoutubeDuration(detail.contentDetails.duration)
+      };
+    }).filter(Boolean);
 
     try {
       await prisma.youtubeCache.create({
-        data: { topic: query, data: JSON.stringify(formattedVideos) }
+        data: { topic: cacheKey, data: JSON.stringify(formattedVideos) }
       });
     } catch (e) {
       console.error("Cache write error", e);
@@ -64,6 +100,8 @@ const getYoutubeVideos = async (query: string) => {
 export const getResourcesForTopic = async (req: Request, res: Response) => {
   try {
     const { subjectId } = req.params;
+    const { language } = req.query;
+    const videoLanguage = (language as string) || 'english';
     const userId = (req as any).user.id;
     
     const subject = await prisma.subject.findUnique({
@@ -119,7 +157,7 @@ export const getResourcesForTopic = async (req: Request, res: Response) => {
       } else {
         resources.push({
            title: `${subject.topic} - YouTube Search`,
-           type: 'YOUTUBE',
+           type: 'YOUTUBE_ENGLISH',
            url: `https://www.youtube.com/results?search_query=${encodeURIComponent(topicQuery)}`
         });
       }
@@ -151,7 +189,7 @@ export const getResourcesForTopic = async (req: Request, res: Response) => {
       } else {
         fallbackResources.unshift({
            title: `${subject.topic} - YouTube Search`,
-           type: 'YOUTUBE',
+           type: 'YOUTUBE_ENGLISH',
            url: `https://www.youtube.com/results?search_query=${encodeURIComponent(topicQueryStr)}`
         });
       }

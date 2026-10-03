@@ -174,6 +174,8 @@ const TodaysPlan = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessionId, scheduleData]);
 
+
+
   const handleGenerate = async () => {
     if (!studyStartTime || !studyEndTime) {
       toast.error('Please fill in your Study Start/End times');
@@ -438,6 +440,8 @@ const TodaysPlan = () => {
                 </span>
               </div>
               
+
+              
               <div className="p-6">
                 <div className="space-y-4 max-w-4xl mx-auto">
                   {scheduleData.sessions.length === 0 ? (
@@ -453,8 +457,9 @@ const TodaysPlan = () => {
                       return (
                         <div 
                           key={session.id} 
-                          className={`flex flex-col md:flex-row p-5 rounded-2xl border ${isBreak ? 'bg-orange-50 border-orange-100' : isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow'}`}
+                          className={`flex flex-col p-5 rounded-2xl border ${isBreak ? 'bg-orange-50 border-orange-100' : isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow'}`}
                         >
+                          <div className="flex flex-col md:flex-row">
                           <div className="w-full md:w-36 flex-shrink-0 flex items-center md:items-start gap-2 text-gray-500 mb-3 md:mb-0 pt-1">
                             <Clock size={18} className={isBreak ? 'text-orange-400' : 'text-blue-500'} />
                             <div className="font-medium text-lg">
@@ -480,6 +485,7 @@ const TodaysPlan = () => {
                                     {session.topic}
                                   </div>
                                 )}
+
                               </div>
                               
                               <div className="flex flex-col items-end gap-2">
@@ -535,6 +541,8 @@ const TodaysPlan = () => {
 
                               </div>
                             </div>
+                          </div>
+                        </div>
                             
                             {loadingResourcesFor === session.id && (
                               <div className="mt-4 border-t border-gray-100 pt-4 flex flex-col items-center justify-center text-blue-500">
@@ -547,13 +555,14 @@ const TodaysPlan = () => {
                               <div className="mt-4 border-t border-gray-100 pt-4">
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">AI Recommended Resources</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  {['YOUTUBE_RICH', 'YOUTUBE', 'ARTICLE', 'PDF', 'PRACTICE'].map(type => {
+                                  {['YOUTUBE_ENGLISH', 'YOUTUBE_TAMIL', 'ARTICLE', 'PDF', 'PRACTICE'].map(type => {
                                     const typeResources = sessionResources[session.id].filter(r => r.type === type);
                                     if (typeResources.length === 0) return null;
                                     
                                     let Icon = Link2;
                                     let typeName = 'Resources';
-                                    if (type === 'YOUTUBE' || type === 'YOUTUBE_RICH') { Icon = Video; typeName = 'YouTube Videos'; }
+                                    if (type === 'YOUTUBE_ENGLISH') { Icon = Video; typeName = 'English Videos'; }
+                                    else if (type === 'YOUTUBE_TAMIL') { Icon = Video; typeName = 'Tamil Videos'; }
                                     else if (type === 'ARTICLE') { Icon = FileText; typeName = 'Articles'; }
                                     else if (type === 'PDF') { Icon = BookOpen; typeName = 'PDF Notes'; }
                                     else if (type === 'PRACTICE') { Icon = Brain; typeName = 'Practice'; }
@@ -565,7 +574,7 @@ const TodaysPlan = () => {
                                         </div>
                                         <div className="space-y-2">
                                           {typeResources.map((r: any, idx: number) => {
-                                            if (type === 'YOUTUBE_RICH') {
+                                            if (type === 'YOUTUBE_ENGLISH' || type === 'YOUTUBE_TAMIL') {
                                               return (
                                                 <a 
                                                   key={idx} 
@@ -611,7 +620,6 @@ const TodaysPlan = () => {
                                 </div>
                               </div>
                             )}
-                          </div>
                         </div>
                       );
                     })

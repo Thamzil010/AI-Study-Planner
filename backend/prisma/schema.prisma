@@ -106,6 +106,7 @@ model StudySession {
   topic            String?
   isHomework       Boolean       @default(false)
   actualDuration   Int?
+  videoLanguage    String        @default("english")
 }
 
 model Resource {

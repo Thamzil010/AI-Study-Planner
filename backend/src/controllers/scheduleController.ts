@@ -447,3 +447,37 @@ export const completeSession = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
+
+export const updateSessionLanguage = async (req: Request, res: Response) => {
+  try {
+    const sessionId = req.params.sessionId as string;
+    const language = req.body.language as string;
+    const userId = (req as any).user.id;
+    
+    const session = await prisma.studySession.findUnique({
+      where: { id: sessionId }
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    const schedule = await prisma.studySchedule.findUnique({
+      where: { id: session.scheduleId }
+    });
+
+    if (!schedule || schedule.userId !== userId) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const updatedSession = await prisma.studySession.update({
+      where: { id: sessionId },
+      data: { videoLanguage: language }
+    });
+
+    res.json(updatedSession);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error updating session language' });
+  }
+};
