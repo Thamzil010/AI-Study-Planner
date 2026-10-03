@@ -199,3 +199,10 @@ model QuizQuestion {
   quizId         String
   quiz           Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
 }
+
+model YoutubeCache {
+  id        String   @id @default(uuid())
+  topic     String   @unique
+  data      String   // JSON string containing the video array
+  createdAt DateTime @default(now())
+}

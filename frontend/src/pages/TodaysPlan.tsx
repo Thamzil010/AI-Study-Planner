@@ -547,13 +547,13 @@ const TodaysPlan = () => {
                               <div className="mt-4 border-t border-gray-100 pt-4">
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">AI Recommended Resources</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  {['YOUTUBE', 'ARTICLE', 'PDF', 'PRACTICE'].map(type => {
+                                  {['YOUTUBE_RICH', 'YOUTUBE', 'ARTICLE', 'PDF', 'PRACTICE'].map(type => {
                                     const typeResources = sessionResources[session.id].filter(r => r.type === type);
                                     if (typeResources.length === 0) return null;
                                     
                                     let Icon = Link2;
                                     let typeName = 'Resources';
-                                    if (type === 'YOUTUBE') { Icon = Video; typeName = 'YouTube Videos'; }
+                                    if (type === 'YOUTUBE' || type === 'YOUTUBE_RICH') { Icon = Video; typeName = 'YouTube Videos'; }
                                     else if (type === 'ARTICLE') { Icon = FileText; typeName = 'Articles'; }
                                     else if (type === 'PDF') { Icon = BookOpen; typeName = 'PDF Notes'; }
                                     else if (type === 'PRACTICE') { Icon = Brain; typeName = 'Practice'; }
@@ -564,18 +564,46 @@ const TodaysPlan = () => {
                                           <Icon size={14} /> {typeName}
                                         </div>
                                         <div className="space-y-2">
-                                          {typeResources.map((r: any, idx: number) => (
-                                            <a 
-                                              key={idx} 
-                                              href={r.url} 
-                                              target="_blank" 
-                                              rel="noreferrer"
-                                              className="block text-sm bg-white text-blue-600 border border-gray-200 hover:border-blue-300 hover:bg-blue-50 p-2 rounded-lg transition font-medium truncate shadow-sm"
-                                              title={r.title}
-                                            >
-                                              {r.title}
-                                            </a>
-                                          ))}
+                                          {typeResources.map((r: any, idx: number) => {
+                                            if (type === 'YOUTUBE_RICH') {
+                                              return (
+                                                <a 
+                                                  key={idx} 
+                                                  href={r.url} 
+                                                  target="_blank" 
+                                                  rel="noreferrer"
+                                                  className="flex flex-col bg-white border border-gray-200 hover:border-red-300 hover:shadow-md rounded-xl overflow-hidden transition group"
+                                                >
+                                                  <div className="relative">
+                                                    <img src={r.thumbnail} alt={r.title} className="w-full h-32 object-cover group-hover:scale-105 transition duration-300" />
+                                                    <div className="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                                      {r.duration}
+                                                    </div>
+                                                  </div>
+                                                  <div className="p-3">
+                                                    <h4 className="font-bold text-sm text-gray-800 line-clamp-2 leading-snug mb-1">{r.title}</h4>
+                                                    <p className="text-xs text-gray-500 font-medium truncate">{r.channelName}</p>
+                                                    <div className="flex items-center justify-between mt-2 text-[10px] text-gray-400 font-bold uppercase">
+                                                      <span>{parseInt(r.viewCount || '0').toLocaleString()} views</span>
+                                                      <span className="text-red-500 bg-red-50 px-2 py-0.5 rounded">Watch</span>
+                                                    </div>
+                                                  </div>
+                                                </a>
+                                              );
+                                            }
+                                            return (
+                                              <a 
+                                                key={idx} 
+                                                href={r.url} 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className="block text-sm bg-white text-blue-600 border border-gray-200 hover:border-blue-300 hover:bg-blue-50 p-2 rounded-lg transition font-medium truncate shadow-sm"
+                                                title={r.title}
+                                              >
+                                                {r.title}
+                                              </a>
+                                            );
+                                          })}
                                         </div>
                                       </div>
                                     );
