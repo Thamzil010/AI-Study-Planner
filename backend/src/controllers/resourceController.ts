@@ -20,7 +20,7 @@ const getYoutubeVideos = async (query: string) => {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return null;
 
-  const cacheKey = `${query}_both_langs_4_vids`;
+  const cacheKey = `${query}_v4_strict_tamil_meta`;
   try {
     const cached = await prisma.youtubeCache.findUnique({ where: { topic: cacheKey } });
     if (cached) return JSON.parse(cached.data);
@@ -35,9 +35,18 @@ const getYoutubeVideos = async (query: string) => {
     
     // Tamil Search
     const baseQuery = query.replace(' educational tutorial', '').trim();
-    const taSearchQuery = `${baseQuery} Tamil explanation | ${baseQuery} தமிழில்`;
-    const taSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(taSearchQuery)}&type=video&maxResults=15&relevanceLanguage=ta&key=${apiKey}`);
+    const taSearchQuery = `${baseQuery} தமிழில் | ${baseQuery} தமிழ் விளக்கம் | ${baseQuery} Tamil explanation`;
+    const taSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(taSearchQuery)}&type=video&maxResults=10&relevanceLanguage=ta&key=${apiKey}`);
     const taSearchData = await taSearchRes.json();
+
+    let taVideoData: any = { items: [] };
+    if (taSearchData.items && taSearchData.items.length > 0) {
+      const videoIds = taSearchData.items.map((i: any) => i.id.videoId).filter(Boolean).join(',');
+      if (videoIds) {
+        const videoRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoIds}&key=${apiKey}`);
+        taVideoData = await videoRes.json();
+      }
+    }
 
     const seenIds = new Set();
     
@@ -57,24 +66,27 @@ const getYoutubeVideos = async (query: string) => {
     }
 
     let taItems: any[] = [];
-    if (taSearchData.items) {
-      for (const item of taSearchData.items) {
-        if (!seenIds.has(item.id.videoId) && taItems.length < 2) {
+    if (taVideoData.items) {
+      for (const item of taVideoData.items) {
+        const videoId = item.id; // From videos API, ID is a direct string
+        if (!seenIds.has(videoId) && taItems.length < 2) {
+          const audioLang = (item.snippet.defaultAudioLanguage || "").toLowerCase();
+          const defaultLang = (item.snippet.defaultLanguage || "").toLowerCase();
           const title = item.snippet.title || "";
           const desc = item.snippet.description || "";
-          const channel = item.snippet.channelTitle || "";
           
-          const combinedText = (title + " " + desc + " " + channel).toLowerCase();
+          const combinedText = (title + " " + desc).toLowerCase();
           
-          // Must contain 'tamil' or tamil unicode characters
-          const hasTamilText = /tamil|[\u0B80-\u0BFF]/.test(combinedText);
+          const isHindi = /hindi|[\u0900-\u097F]/.test(combinedText) || audioLang.startsWith('hi') || defaultLang.startsWith('hi');
+          const hasTamilMetadata = audioLang.startsWith('ta') || defaultLang.startsWith('ta');
+          const hasTamilScript = /[\u0B80-\u0BFF]/.test(combinedText);
           
-          // Should not obviously be Hindi or Telugu or Malayalam (just basic sanity check for Hindi as requested)
-          const isObviouslyHindi = /hindi|[\u0900-\u097F]/.test(combinedText);
-
-          if (hasTamilText && !isObviouslyHindi) {
-            seenIds.add(item.id.videoId);
-            taItems.push(item);
+          if (!isHindi && (hasTamilMetadata || hasTamilScript)) {
+            seenIds.add(videoId);
+            const formattedItem = { ...item, id: { videoId: videoId } };
+            taItems.push(formattedItem);
+          } else {
+            console.log(`Rejected Tamil candidate: ${title} (Audio: ${audioLang}, Lang: ${defaultLang}, Script: ${hasTamilScript})`);
           }
         }
       }
