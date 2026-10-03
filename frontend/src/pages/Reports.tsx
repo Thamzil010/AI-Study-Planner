@@ -1,239 +1,352 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Download, FileText, ChevronRight, X, Clock, Target, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Book, Clock, TrendingUp, Plus, X, Download } from 'lucide-react';
-import { api } from '../services/api';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
-const Progress = () => {
-  const [progressEntries, setProgressEntries] = useState<any[]>([]);
-  const [subjects, setSubjects] = useState<any[]>([]);
+interface SubjectDetail {
+  subjectName: string;
+  topic: string;
+  plannedMinutes: number;
+  completedMinutes: number;
+  progress: number;
+  status: string;
+}
+
+interface StudyPlanReport {
+  id: string;
+  date: string;
+  totalSubjects: number;
+  totalPlannedMinutes: number;
+  totalCompletedMinutes: number;
+  overallProgress: number;
+  subjectsDetails: SubjectDetail[];
+}
+
+const Reports: React.FC = () => {
+  const [reports, setReports] = useState<StudyPlanReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showLogForm, setShowLogForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [newLog, setNewLog] = useState({ subjectId: '', hoursStudied: '' });
+  const [selectedReport, setSelectedReport] = useState<StudyPlanReport | null>(null);
 
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
+    fetchReports();
+  }, []);
+
+  const fetchReports = async () => {
     try {
-      const [progressRes, subjectsRes] = await Promise.all([
-        api.get('/progress'),
-        api.get('/subjects')
-      ]);
-      setProgressEntries(progressRes.data);
-      setSubjects(subjectsRes.data);
-      if (subjectsRes.data.length > 0) {
-        setNewLog(prev => ({ ...prev, subjectId: subjectsRes.data[0].id }));
-      }
+      setLoading(true);
+      const res = await axios.get('/api/reports', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      setReports(res.data);
     } catch (error) {
-      console.error('Failed to fetch data', error);
+      console.error('Error fetching reports:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react/set-state-in-effect
-    fetchData();
-  }, [fetchData]);
-
-  const handleLogProgress = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await api.post('/progress', {
-        subjectId: newLog.subjectId,
-        hoursStudied: parseFloat(newLog.hoursStudied)
-      });
-      setShowLogForm(false);
-      setNewLog(prev => ({ ...prev, hoursStudied: '' }));
-      fetchData();
-    } catch (error) {
-      console.error('Failed to log progress', error);
-      alert('Failed to log progress.');
-    } finally {
-      setSaving(false);
-    }
   };
 
-  const generatePDF = async () => {
-    const element = document.getElementById('report-content');
-    if (!element) return;
+  const formatDuration = (minutes: number): string => {
+    if (!minutes) return '0 mins';
+    const hrs = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    if (hrs > 0 && mins > 0) return `${hrs} hr${hrs > 1 ? 's' : ''} ${mins} mins`;
+    if (hrs > 0) return `${hrs} hr${hrs > 1 ? 's' : ''}`;
+    return `${mins} mins`;
+  };
+
+  const downloadPDF = (report: StudyPlanReport) => {
+    const doc = new jsPDF();
+    const dateStr = new Date(report.date).toLocaleDateString('en-US', { 
+      year: 'numeric', month: 'long', day: 'numeric' 
+    });
+
+    const userName = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!).name : 'Student';
+
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(33, 37, 41);
+    doc.text('AI STUDY PLANNER', 14, 20);
+    doc.setFontSize(16);
+    doc.text('STUDY PLAN REPORT', 14, 30);
     
-    const actions = document.getElementById('report-actions');
-    if (actions) actions.style.display = 'none';
+    doc.setFontSize(12);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Student Name: ${userName}`, 14, 45);
+    doc.text(`Date: ${dateStr}`, 14, 52);
 
-    try {
-      const canvas = await html2canvas(element, { scale: 2 });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save('Progress_Report.pdf');
-    } catch (error) {
-      console.error('Error generating PDF', error);
-    } finally {
-      if (actions) actions.style.display = 'flex';
-    }
+    // Summary Section
+    doc.setFontSize(14);
+    doc.setTextColor(33, 37, 41);
+    doc.text('SUMMARY', 14, 65);
+    doc.line(14, 67, 196, 67);
+
+    doc.setFontSize(12);
+    doc.text(`Total Subjects: ${report.totalSubjects}`, 14, 75);
+    doc.text(`Total Planned Study Time: ${formatDuration(report.totalPlannedMinutes)}`, 14, 82);
+    doc.text(`Total Completed Study Time: ${formatDuration(report.totalCompletedMinutes)}`, 14, 89);
+    doc.text(`Overall Progress: ${report.overallProgress}%`, 14, 96);
+
+    // Table Section
+    doc.setFontSize(14);
+    doc.text('SUBJECT-WISE REPORT', 14, 110);
+    doc.line(14, 112, 196, 112);
+
+    const tableData = report.subjectsDetails.map(sub => [
+      sub.subjectName,
+      sub.topic,
+      formatDuration(sub.plannedMinutes),
+      formatDuration(sub.completedMinutes),
+      `${sub.progress}%`,
+      sub.status
+    ]);
+
+    autoTable(doc, {
+      startY: 120,
+      head: [['Subject', 'Topic', 'Planned', 'Completed', 'Progress', 'Status']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [37, 99, 235] },
+      styles: { fontSize: 10, cellPadding: 5 },
+    });
+
+    // Footer
+    const finalY = (doc as any).lastAutoTable.finalY || 120;
+    doc.setFontSize(10);
+    doc.setTextColor(150, 150, 150);
+    doc.text('Generated by AI Study Planner', 14, finalY + 15);
+
+    doc.save(`Study_Plan_Report_${dateStr.replace(/ /g, '_')}.pdf`);
   };
-
-  if (loading) return <div className="flex h-screen items-center justify-center">Loading progress...</div>;
 
   return (
-    <div className="space-y-6" id="report-content">
+    <div className="space-y-6">
       <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Progress Tracker</h2>
-          <p className="text-gray-500 text-sm mt-1">Monitor your mastery and log manual study sessions.</p>
-        </div>
-        <div id="report-actions" className="flex items-center gap-3">
-          <button 
-            onClick={generatePDF}
-            className="px-5 py-2.5 rounded-xl shadow-sm border border-gray-200 transition flex items-center gap-2 font-medium bg-white text-gray-700 hover:bg-gray-50"
-          >
-            <Download size={18} /> Export PDF
-          </button>
-          <button 
-            onClick={() => setShowLogForm(!showLogForm)}
-            className={`px-5 py-2.5 rounded-xl shadow-md transition flex items-center gap-2 font-medium ${showLogForm ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-          >
-            {showLogForm ? <><X size={18} /> Cancel</> : <><Plus size={18} /> Log Study Time</>}
-          </button>
+          <h2 className="text-2xl font-bold text-gray-800">Reports</h2>
+          <p className="text-gray-500 text-sm mt-1">Track your study progress for each generated study plan.</p>
         </div>
       </div>
 
-      <AnimatePresence>
-        {showLogForm && (
-          <motion.form 
-            initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            onSubmit={handleLogProgress} 
-            className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-5 max-w-2xl"
-          >
-            <h3 className="text-lg font-bold text-gray-800 border-b pb-2">Log Manual Session</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                <select 
-                  value={newLog.subjectId} 
-                  onChange={e => setNewLog({...newLog, subjectId: e.target.value})}
-                  className="w-full rounded-xl border-gray-300 shadow-sm border p-3 focus:ring-2 focus:ring-blue-500 outline-none transition bg-white"
-                  required
-                >
-                  {subjects.length === 0 ? <option value="">No subjects found</option> : null}
-                  {subjects.map(sub => (
-                    <option key={sub.id} value={sub.id}>{sub.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Hours Studied</label>
-                <input 
-                  type="number" 
-                  step="0.1" 
-                  min="0.1"
-                  value={newLog.hoursStudied} 
-                  onChange={e => setNewLog({...newLog, hoursStudied: e.target.value})} 
-                  required 
-                  placeholder="e.g. 1.5"
-                  className="w-full rounded-xl border-gray-300 shadow-sm border p-3 focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                />
-              </div>
-            </div>
-            <div className="pt-2">
-              <button type="submit" disabled={saving || subjects.length === 0} className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition font-medium disabled:opacity-70">
-                {saving ? 'Saving...' : 'Save Log'}
-              </button>
-            </div>
-          </motion.form>
-        )}
-      </AnimatePresence>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Subject Mastery */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <TrendingUp size={24} className="text-blue-500" />
-            <h3 className="text-xl font-bold text-gray-800">Subject Mastery</h3>
-          </div>
-          
-          <div className="space-y-6">
-            {subjects.length === 0 ? (
-              <div className="text-center py-10">
-                <Book size={40} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500 font-medium">No subjects found.</p>
-                <p className="text-gray-400 text-sm mt-1">Add subjects to track mastery.</p>
-              </div>
-            ) : (
-              subjects.map(subject => (
-                <div key={subject.id} className="group">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${subject.completionRate > 80 ? 'bg-green-500' : subject.completionRate > 40 ? 'bg-blue-500' : 'bg-orange-500'}`} />
-                      {subject.name}
-                    </span>
-                    <span className="text-sm font-bold text-gray-700">{Math.round(subject.completionRate || 0)}%</span>
+      {loading ? (
+        <div className="text-center py-20">
+          <div className="animate-spin w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-500 font-medium">Loading reports...</p>
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16 text-center">
+          <FileText size={48} className="mx-auto text-gray-300 mb-4" />
+          <h3 className="text-xl font-bold text-gray-800 mb-2">No Reports Yet</h3>
+          <p className="text-gray-500">Generate a study plan and start studying to see your reports here.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {reports.map((report) => (
+            <div key={report.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col hover:shadow-md transition">
+              <div className="p-6 border-b border-gray-50">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="bg-blue-50 text-blue-700 font-bold px-4 py-1.5 rounded-full text-sm">
+                    {new Date(report.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </div>
-                  <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden shadow-inner">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min(100, subject.completionRate || 0)}%` }}
-                      transition={{ duration: 1, ease: "easeOut" }}
-                      className={`h-full rounded-full ${subject.completionRate > 80 ? 'bg-green-500' : subject.completionRate > 40 ? 'bg-blue-500' : 'bg-orange-500'}`} 
-                    />
+                  <div className="text-right">
+                    <span className="text-2xl font-black text-gray-800">{report.overallProgress}%</span>
+                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Progress</p>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Recent Logs */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-            <h3 className="text-lg font-bold text-gray-800">Recent Logs</h3>
-            <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full">
-              {progressEntries.length} Total
-            </span>
-          </div>
-          
-          <div className="overflow-y-auto max-h-[400px]">
-            {progressEntries.length === 0 ? (
-              <div className="text-center py-16">
-                <Clock size={40} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500 font-medium">No study logs yet.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {progressEntries.map(entry => (
-                  <div key={entry.id} className="p-4 hover:bg-gray-50 transition flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
-                        <Book size={18} />
-                      </div>
-                      <div>
-                        <p className="font-bold text-gray-800">{entry.subject?.name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(entry.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="inline-block bg-gray-100 text-gray-800 px-3 py-1 rounded-lg text-sm font-bold shadow-sm">
-                        +{entry.hoursStudied} hr
-                      </span>
-                    </div>
+                
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Target size={18} className="text-indigo-500" />
+                    <span className="text-sm font-medium">Subjects: <strong className="text-gray-800">{report.totalSubjects}</strong></span>
                   </div>
-                ))}
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Clock size={18} className="text-orange-500" />
+                    <span className="text-sm font-medium">Planned: <strong className="text-gray-800">{formatDuration(report.totalPlannedMinutes)}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <CheckCircle size={18} className="text-green-500" />
+                    <span className="text-sm font-medium">Completed: <strong className="text-gray-800">{formatDuration(report.totalCompletedMinutes)}</strong></span>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+              <div className="p-4 bg-gray-50 flex items-center justify-between gap-3 mt-auto">
+                <button 
+                  onClick={() => setSelectedReport(report)}
+                  className="flex-1 bg-white border border-gray-200 text-gray-800 py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-50 transition flex items-center justify-center gap-2"
+                >
+                  VIEW REPORT <ChevronRight size={16} />
+                </button>
+                <button 
+                  onClick={() => downloadPDF(report)}
+                  className="px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition"
+                  title="Download PDF"
+                >
+                  <Download size={18} />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      )}
+
+      {/* Detailed Report Modal */}
+      <AnimatePresence>
+        {selectedReport && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+            >
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-800">Study Plan Report</h3>
+                  <p className="text-gray-500 mt-1">
+                    {new Date(selectedReport.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => downloadPDF(selectedReport)}
+                    className="hidden md:flex px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition items-center gap-2 font-medium text-sm"
+                  >
+                    <Download size={16} /> Download PDF
+                  </button>
+                  <button 
+                    onClick={() => setSelectedReport(null)}
+                    className="p-2 bg-white text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-full border border-gray-200 transition"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 overflow-y-auto custom-scrollbar">
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                  <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Subjects</p>
+                    <p className="text-2xl font-black text-gray-800">{selectedReport.totalSubjects}</p>
+                  </div>
+                  <div className="bg-orange-50 rounded-2xl p-4 border border-orange-100">
+                    <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-1">Planned Time</p>
+                    <p className="text-xl font-black text-orange-900">{formatDuration(selectedReport.totalPlannedMinutes)}</p>
+                  </div>
+                  <div className="bg-green-50 rounded-2xl p-4 border border-green-100">
+                    <p className="text-xs font-bold text-green-600 uppercase tracking-wider mb-1">Completed Time</p>
+                    <p className="text-xl font-black text-green-900">{formatDuration(selectedReport.totalCompletedMinutes)}</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
+                    <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Overall Progress</p>
+                    <p className="text-2xl font-black text-blue-900">{selectedReport.overallProgress}%</p>
+                  </div>
+                </div>
+
+                <h4 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Subject-wise Study Report</h4>
+                
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-hidden border border-gray-200 rounded-2xl">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200 text-sm">
+                        <th className="p-4 font-bold text-gray-700">Subject</th>
+                        <th className="p-4 font-bold text-gray-700">Topic</th>
+                        <th className="p-4 font-bold text-gray-700">Planned</th>
+                        <th className="p-4 font-bold text-gray-700">Completed</th>
+                        <th className="p-4 font-bold text-gray-700">Progress</th>
+                        <th className="p-4 font-bold text-gray-700">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {selectedReport.subjectsDetails.map((sub, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50/50 transition">
+                          <td className="p-4 font-bold text-gray-800">{sub.subjectName}</td>
+                          <td className="p-4 text-gray-600">{sub.topic}</td>
+                          <td className="p-4 text-gray-600 font-medium">{formatDuration(sub.plannedMinutes)}</td>
+                          <td className="p-4 text-gray-600 font-medium">{formatDuration(sub.completedMinutes)}</td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full ${sub.progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                                  style={{ width: `${sub.progress}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-xs font-bold text-gray-700">{sub.progress}%</span>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                              sub.status === 'Completed' ? 'bg-green-100 text-green-700' : 
+                              sub.status === 'Partially Completed' ? 'bg-blue-100 text-blue-700' : 
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {sub.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
+                  {selectedReport.subjectsDetails.map((sub, idx) => (
+                    <div key={idx} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Subject</p>
+                          <p className="font-bold text-gray-800 text-lg">{sub.subjectName}</p>
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                          sub.status === 'Completed' ? 'bg-green-100 text-green-700' : 
+                          sub.status === 'Partially Completed' ? 'bg-blue-100 text-blue-700' : 
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          {sub.status}
+                        </span>
+                      </div>
+                      <div className="mb-4">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Topic</p>
+                        <p className="text-gray-700 bg-gray-50 px-3 py-2 rounded-xl text-sm border border-gray-100">{sub.topic}</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                          <p className="text-xs text-gray-500 mb-1">Planned Time</p>
+                          <p className="font-bold text-gray-800">{formatDuration(sub.plannedMinutes)}</p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                          <p className="text-xs text-gray-500 mb-1">Actual Time</p>
+                          <p className="font-bold text-gray-800">{formatDuration(sub.completedMinutes)}</p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-end mb-1">
+                          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Progress</p>
+                          <span className="text-sm font-bold text-gray-800">{sub.progress}%</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full ${sub.progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                            style={{ width: `${sub.progress}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
-export default Progress;
+export default Reports;
