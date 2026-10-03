@@ -188,6 +188,7 @@ export const generateSchedule = async (req: Request, res: Response) => {
     7. Completed topics (mastery >= 100%) MUST NEVER be scheduled.
     8. Do not repeat the same subject multiple times unless necessary to hit the total study target.
     9. Ensure the total study time respects the Total Study Target.
+    10. STRICT DURATION CONSTRAINT: For each subject/topic, the SUM of actual study time across ALL its study sessions MUST EXACTLY EQUAL its requested estimatedHours * 60 minutes. NEVER allocate more time than requested for a subject.
 
     Return ONLY a valid JSON array of sessions.
     Format example:
@@ -214,23 +215,67 @@ export const generateSchedule = async (req: Request, res: Response) => {
 
     let sessionData;
     let fallbackUsed = false;
-    let retries = 3;
+    let retries = 5;
     let delay = 1000;
+
+    const calculateActualDuration = (startStr: string, endStr: string) => {
+      if (!startStr || !endStr) return 0;
+      const [h1, m1] = startStr.split(':').map(Number);
+      const [h2, m2] = endStr.split(':').map(Number);
+      let start = h1 * 60 + m1;
+      let end = h2 * 60 + m2;
+      if (end < start) end += 1440; // Crossed midnight
+      return end - start;
+    };
 
     while (retries > 0) {
       try {
-        let rawText = await generateWithAI(prompt, 'gemini-flash-lite-latest', true);
+        let rawText = await generateWithAI(prompt + "\nSTRICT RULE: The sum of actual study time across ALL study sessions for a subject MUST EXACTLY EQUAL its requested estimatedHours * 60 minutes. NEVER exceed the target.", 'gemini-flash-lite-latest', true);
         const parsed = JSON.parse(rawText);
-        sessionData = parsed.map((s: any) => ({
-          ...s,
-          subjectId: s.subjectName ? subjectsMap[s.subjectName]?.id || null : null
-        }));
-        break; // Success, exit retry loop
+        
+        const tempSessionData = parsed.map((s: any) => {
+          const actualDuration = calculateActualDuration(s.startTime, s.endTime);
+          return {
+            ...s,
+            durationMinutes: actualDuration > 0 ? actualDuration : s.durationMinutes,
+            subjectId: s.subjectName ? subjectsMap[s.subjectName]?.id || null : null
+          };
+        });
+
+        // VALIDATION: Check strict duration constraint
+        const subjectAllocations: Record<string, number> = {};
+        for (const session of tempSessionData) {
+          if (session.type === 'STUDY' && session.subjectName && session.topic) {
+            const key = `${session.subjectName}_${session.topic}`;
+            subjectAllocations[key] = (subjectAllocations[key] || 0) + session.durationMinutes;
+          }
+        }
+
+        let isValid = true;
+        for (const task of payload.tasks) {
+          const key = `${task.subjectName}_${task.topic}`;
+          const requestedMinutes = (task.estimatedHours || 1) * 60;
+          const allocated = subjectAllocations[key] || 0;
+          
+          if (allocated > requestedMinutes) {
+            console.warn(`Validation failed: ${key} allocated ${allocated}m but requested ${requestedMinutes}m`);
+            isValid = false;
+            break;
+          }
+        }
+
+        if (!isValid) throw new Error("Validation failed: Study duration constraint violated.");
+
+        sessionData = tempSessionData;
+        break;
       } catch (error: any) {
         if (error.status === 503 && retries > 1) {
           console.warn(`503 High Demand during schedule generation. Retrying in ${delay}ms...`);
           await new Promise(res => setTimeout(res, delay));
           delay *= 2;
+          retries--;
+        } else if (retries > 1) {
+          console.warn(`AI Validation failed: ${error.message}. Retrying...`);
           retries--;
         } else {
           console.warn('AI Generation failed, using fallback rule-based scheduler', error);
