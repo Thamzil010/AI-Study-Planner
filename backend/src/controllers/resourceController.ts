@@ -20,7 +20,7 @@ const getYoutubeVideos = async (query: string) => {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return null;
 
-  const cacheKey = `${query}_v4_strict_tamil_meta`;
+  const cacheKey = `${query}_v5_highest_views_2_vids`;
   try {
     const cached = await prisma.youtubeCache.findUnique({ where: { topic: cacheKey } });
     if (cached) return JSON.parse(cached.data);
@@ -29,91 +29,79 @@ const getYoutubeVideos = async (query: string) => {
   }
 
   try {
-    // English Search
-    const enSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5&relevanceLanguage=en&key=${apiKey}`);
+    // 1. Search for English Videos
+    const enSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=10&relevanceLanguage=en&key=${apiKey}`);
     const enSearchData = await enSearchRes.json();
     
-    // Tamil Search
+    // 2. Search for Tamil Videos
     const baseQuery = query.replace(' educational tutorial', '').trim();
     const taSearchQuery = `${baseQuery} தமிழில் | ${baseQuery} தமிழ் விளக்கம் | ${baseQuery} Tamil explanation`;
-    const taSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(taSearchQuery)}&type=video&maxResults=10&relevanceLanguage=ta&key=${apiKey}`);
+    const taSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(taSearchQuery)}&type=video&maxResults=15&relevanceLanguage=ta&key=${apiKey}`);
     const taSearchData = await taSearchRes.json();
 
-    let taVideoData: any = { items: [] };
-    if (taSearchData.items && taSearchData.items.length > 0) {
-      const videoIds = taSearchData.items.map((i: any) => i.id.videoId).filter(Boolean).join(',');
-      if (videoIds) {
-        const videoRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoIds}&key=${apiKey}`);
-        taVideoData = await videoRes.json();
-      }
-    }
+    // 3. Extract all unique IDs
+    const enIds = (enSearchData.items || []).map((i: any) => i.id.videoId).filter(Boolean);
+    const taIds = (taSearchData.items || []).map((i: any) => i.id.videoId).filter(Boolean);
+    const allIds = Array.from(new Set([...enIds, ...taIds])).slice(0, 50); // Max 50 per request
 
-    const seenIds = new Set();
+    if (allIds.length === 0) return null;
+
+    // 4. Batch fetch metadata and statistics for all videos
+    const videoRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${allIds.join(',')}&key=${apiKey}`);
+    const videoData = await videoRes.json();
     
-    let enItems: any[] = [];
-    if (enSearchData.items) {
-      for (const item of enSearchData.items) {
-        if (!seenIds.has(item.id.videoId) && enItems.length < 2) {
-          // Optional: Reject obvious Hindi in English results, though relevanceLanguage=en usually works well
-          const combinedText = (item.snippet.title + " " + item.snippet.description).toLowerCase();
-          const isObviouslyHindi = /hindi|[\u0900-\u097F]/.test(combinedText);
-          if (!isObviouslyHindi) {
-            seenIds.add(item.id.videoId);
-            enItems.push(item);
-          }
-        }
-      }
-    }
+    if (!videoData.items) return null;
 
-    let taItems: any[] = [];
-    if (taVideoData.items) {
-      for (const item of taVideoData.items) {
-        const videoId = item.id; // From videos API, ID is a direct string
-        if (!seenIds.has(videoId) && taItems.length < 2) {
-          const audioLang = (item.snippet.defaultAudioLanguage || "").toLowerCase();
-          const defaultLang = (item.snippet.defaultLanguage || "").toLowerCase();
-          const title = item.snippet.title || "";
-          const desc = item.snippet.description || "";
-          
-          const combinedText = (title + " " + desc).toLowerCase();
-          
-          const isHindi = /hindi|[\u0900-\u097F]/.test(combinedText) || audioLang.startsWith('hi') || defaultLang.startsWith('hi');
-          const hasTamilMetadata = audioLang.startsWith('ta') || defaultLang.startsWith('ta');
-          const hasTamilScript = /[\u0B80-\u0BFF]/.test(combinedText);
-          
-          if (!isHindi && (hasTamilMetadata || hasTamilScript)) {
-            seenIds.add(videoId);
-            const formattedItem = { ...item, id: { videoId: videoId } };
-            taItems.push(formattedItem);
-          } else {
-            console.log(`Rejected Tamil candidate: ${title} (Audio: ${audioLang}, Lang: ${defaultLang}, Script: ${hasTamilScript})`);
-          }
-        }
-      }
-    }
+    // Helper to evaluate text
+    const validateVideo = (item: any, isTargetTamil: boolean) => {
+      const audioLang = (item.snippet.defaultAudioLanguage || "").toLowerCase();
+      const defaultLang = (item.snippet.defaultLanguage || "").toLowerCase();
+      const title = item.snippet.title || "";
+      const desc = item.snippet.description || "";
+      const combinedText = (title + " " + desc).toLowerCase();
+      
+      const isHindi = /hindi|[\u0900-\u097F]/.test(combinedText) || audioLang.startsWith('hi') || defaultLang.startsWith('hi');
+      if (isHindi) return false;
 
-    const finalItems = [...enItems, ...taItems];
+      if (isTargetTamil) {
+        const hasTamilMetadata = audioLang.startsWith('ta') || defaultLang.startsWith('ta');
+        const hasTamilScript = /[\u0B80-\u0BFF]/.test(combinedText);
+        return hasTamilMetadata || hasTamilScript;
+      }
+      return true; // English usually doesn't need strict validation beyond filtering out Hindi
+    };
+
+    // 5. Filter and sort English videos
+    const validEnVideos = videoData.items
+      .filter((item: any) => enIds.includes(item.id) && validateVideo(item, false))
+      .sort((a: any, b: any) => (parseInt(b.statistics.viewCount) || 0) - (parseInt(a.statistics.viewCount) || 0));
+    
+    const selectedEnVideo = validEnVideos.length > 0 ? validEnVideos[0] : null;
+
+    // 6. Filter and sort Tamil videos (exclude the selected English video if it somehow overlapped)
+    const validTaVideos = videoData.items
+      .filter((item: any) => taIds.includes(item.id) && item.id !== selectedEnVideo?.id && validateVideo(item, true))
+      .sort((a: any, b: any) => (parseInt(b.statistics.viewCount) || 0) - (parseInt(a.statistics.viewCount) || 0));
+
+    const selectedTaVideo = validTaVideos.length > 0 ? validTaVideos[0] : null;
+
+    // 7. Format exactly 2 videos
+    const finalItems = [
+      selectedEnVideo ? { ...selectedEnVideo, _mappedType: 'YOUTUBE_ENGLISH' } : null,
+      selectedTaVideo ? { ...selectedTaVideo, _mappedType: 'YOUTUBE_TAMIL' } : null
+    ].filter(Boolean);
+
     if (finalItems.length === 0) return null;
 
-    const videoIds = finalItems.map((item: any) => item.id.videoId).join(',');
-    const videoRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${videoIds}&key=${apiKey}`);
-    const videoData = await videoRes.json();
-
-    const formattedVideos = finalItems.map(searchItem => {
-      const detail = videoData.items?.find((v: any) => v.id === searchItem.id.videoId);
-      if (!detail) return null;
-      const isTamil = taItems.some(ti => ti.id.videoId === searchItem.id.videoId);
-      
-      return {
-        title: detail.snippet.title,
-        type: isTamil ? 'YOUTUBE_TAMIL' : 'YOUTUBE_ENGLISH',
-        url: `https://www.youtube.com/watch?v=${detail.id}`,
-        thumbnail: detail.snippet.thumbnails.medium.url,
-        channelName: detail.snippet.channelTitle,
-        viewCount: detail.statistics.viewCount,
-        duration: formatYoutubeDuration(detail.contentDetails.duration)
-      };
-    }).filter(Boolean);
+    const formattedVideos = finalItems.map((detail: any) => ({
+      title: detail.snippet.title,
+      type: detail._mappedType,
+      url: `https://www.youtube.com/watch?v=${detail.id}`,
+      thumbnail: detail.snippet.thumbnails.medium.url,
+      channelName: detail.snippet.channelTitle,
+      viewCount: detail.statistics.viewCount,
+      duration: formatYoutubeDuration(detail.contentDetails.duration)
+    }));
 
     try {
       await prisma.youtubeCache.create({

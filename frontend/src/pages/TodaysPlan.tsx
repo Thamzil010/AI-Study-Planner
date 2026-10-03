@@ -561,8 +561,8 @@ const TodaysPlan = () => {
                                     
                                     let Icon = Link2;
                                     let typeName = 'Resources';
-                                    if (type === 'YOUTUBE_ENGLISH') { Icon = Video; typeName = 'English Videos'; }
-                                    else if (type === 'YOUTUBE_TAMIL') { Icon = Video; typeName = 'Tamil Videos'; }
+                                    if (type === 'YOUTUBE_ENGLISH') { Icon = Video; typeName = 'English Video'; }
+                                    else if (type === 'YOUTUBE_TAMIL') { Icon = Video; typeName = 'Tamil Video'; }
                                     else if (type === 'ARTICLE') { Icon = FileText; typeName = 'Articles'; }
                                     else if (type === 'PDF') { Icon = BookOpen; typeName = 'PDF Notes'; }
                                     else if (type === 'PRACTICE') { Icon = Brain; typeName = 'Practice'; }
