@@ -568,20 +568,22 @@ const TodaysPlan = () => {
                                     else if (type === 'PRACTICE') { Icon = Brain; typeName = 'Practice'; }
                                     
                                     return (
-                                      <div key={type} className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-600 uppercase mb-2">
-                                          <Icon size={14} /> {typeName}
-                                        </div>
-                                        <div className="space-y-2">
+                                      <div key={type} className={type.startsWith('YOUTUBE') ? "" : "bg-gray-50 p-3 rounded-xl border border-gray-100"}>
+                                        {!type.startsWith('YOUTUBE') && (
+                                          <div className="flex items-center gap-1.5 text-xs font-bold text-gray-600 uppercase mb-2">
+                                            <Icon size={14} /> {typeName}
+                                          </div>
+                                        )}
+                                        <div className={type.startsWith('YOUTUBE') ? "h-full" : "space-y-2"}>
                                           {typeResources.map((r: any, idx: number) => {
-                                            if (type === 'YOUTUBE_ENGLISH' || type === 'YOUTUBE_TAMIL') {
+                                            if (type.startsWith('YOUTUBE')) {
                                               return (
                                                 <a 
                                                   key={idx} 
                                                   href={r.url} 
                                                   target="_blank" 
                                                   rel="noreferrer"
-                                                  className="flex flex-col bg-white border border-gray-200 hover:border-red-300 hover:shadow-md rounded-xl overflow-hidden transition group"
+                                                  className="flex flex-col h-full bg-white border border-gray-200 hover:border-red-300 hover:shadow-md rounded-xl overflow-hidden transition group"
                                                 >
                                                   <div className="relative">
                                                     <img src={r.thumbnail} alt={r.title} className="w-full h-32 object-cover group-hover:scale-105 transition duration-300" />
