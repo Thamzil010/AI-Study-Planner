@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
 import { Download, FileText, ChevronRight, X, Clock, Target, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import jsPDF from 'jspdf';
@@ -37,9 +37,7 @@ const Reports: React.FC = () => {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('/api/reports', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
+      const res = await api.get('/reports');
       setReports(res.data);
     } catch (error) {
       console.error('Error fetching reports:', error);
