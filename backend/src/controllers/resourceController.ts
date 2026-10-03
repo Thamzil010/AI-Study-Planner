@@ -30,11 +30,13 @@ const getYoutubeVideos = async (query: string) => {
 
   try {
     // English Search
-    const enSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=3&relevanceLanguage=en&key=${apiKey}`);
+    const enSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5&relevanceLanguage=en&key=${apiKey}`);
     const enSearchData = await enSearchRes.json();
     
     // Tamil Search
-    const taSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query + ' in tamil')}&type=video&maxResults=3&relevanceLanguage=ta&key=${apiKey}`);
+    const baseQuery = query.replace(' educational tutorial', '').trim();
+    const taSearchQuery = `${baseQuery} Tamil explanation | ${baseQuery} தமிழில்`;
+    const taSearchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(taSearchQuery)}&type=video&maxResults=15&relevanceLanguage=ta&key=${apiKey}`);
     const taSearchData = await taSearchRes.json();
 
     const seenIds = new Set();
@@ -43,8 +45,13 @@ const getYoutubeVideos = async (query: string) => {
     if (enSearchData.items) {
       for (const item of enSearchData.items) {
         if (!seenIds.has(item.id.videoId) && enItems.length < 2) {
-          seenIds.add(item.id.videoId);
-          enItems.push(item);
+          // Optional: Reject obvious Hindi in English results, though relevanceLanguage=en usually works well
+          const combinedText = (item.snippet.title + " " + item.snippet.description).toLowerCase();
+          const isObviouslyHindi = /hindi|[\u0900-\u097F]/.test(combinedText);
+          if (!isObviouslyHindi) {
+            seenIds.add(item.id.videoId);
+            enItems.push(item);
+          }
         }
       }
     }
@@ -53,8 +60,22 @@ const getYoutubeVideos = async (query: string) => {
     if (taSearchData.items) {
       for (const item of taSearchData.items) {
         if (!seenIds.has(item.id.videoId) && taItems.length < 2) {
-          seenIds.add(item.id.videoId);
-          taItems.push(item);
+          const title = item.snippet.title || "";
+          const desc = item.snippet.description || "";
+          const channel = item.snippet.channelTitle || "";
+          
+          const combinedText = (title + " " + desc + " " + channel).toLowerCase();
+          
+          // Must contain 'tamil' or tamil unicode characters
+          const hasTamilText = /tamil|[\u0B80-\u0BFF]/.test(combinedText);
+          
+          // Should not obviously be Hindi or Telugu or Malayalam (just basic sanity check for Hindi as requested)
+          const isObviouslyHindi = /hindi|[\u0900-\u097F]/.test(combinedText);
+
+          if (hasTamilText && !isObviouslyHindi) {
+            seenIds.add(item.id.videoId);
+            taItems.push(item);
+          }
         }
       }
     }
