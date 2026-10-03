@@ -55,8 +55,27 @@ const Progress = () => {
     }
   };
 
-  const generatePDF = () => {
-    window.print();
+  const generatePDF = async () => {
+    const element = document.getElementById('report-content');
+    if (!element) return;
+    
+    const actions = document.getElementById('report-actions');
+    if (actions) actions.style.display = 'none';
+
+    try {
+      const canvas = await html2canvas(element, { scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save('Progress_Report.pdf');
+    } catch (error) {
+      console.error('Error generating PDF', error);
+    } finally {
+      if (actions) actions.style.display = 'flex';
+    }
   };
 
   if (loading) return <div className="flex h-screen items-center justify-center">Loading progress...</div>;

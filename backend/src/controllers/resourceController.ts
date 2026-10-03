@@ -33,12 +33,30 @@ export const getResourcesForTopic = async (req: Request, res: Response) => {
     Each object must have:
     - "title": A descriptive title of the resource.
     - "type": "YOUTUBE", "ARTICLE", or "PDF"
-    - "url": Generate a highly likely search URL (e.g., https://www.youtube.com/results?search_query=...) or a direct URL if you know a canonical free resource (like a specific GeeksforGeeks or Wikipedia page). 
+    - "url": Generate a highly likely search URL (e.g., https://www.youtube.com/results?search_query=...). For the PDF Notes link, NEVER invent a direct URL to a PDF file because they often 404. Instead, ALWAYS generate a Google Search URL to search for the PDF, exactly like this: https://www.google.com/search?q=Subject+Topic+filetype:pdf (replace Subject and Topic with the actual subject and topic words separated by '+'). For YOUTUBE and ARTICLE, use search URLs or known reliable sites (like Wikipedia or GeeksforGeeks).
     `;
 
     try {
       let rawText = await generateWithAI(prompt, 'gemini-flash-lite-latest', true);
-      const resources = JSON.parse(rawText);
+      let resources = JSON.parse(rawText);
+      
+      resources = resources.map((r: any) => {
+        const t = r.type?.toUpperCase() || '';
+        if (t.includes('PDF')) r.type = 'PDF';
+        else if (t.includes('YOUTUBE') || t.includes('VIDEO')) r.type = 'YOUTUBE';
+        else if (t.includes('ARTICLE')) r.type = 'ARTICLE';
+        return r;
+      });
+
+      const hasPDF = resources.some((r: any) => r.type === 'PDF');
+      if (!hasPDF) {
+        resources.push({
+          title: `${subject.topic} Cheatsheet / PDF Notes`, 
+          type: 'PDF', 
+          url: `https://www.google.com/search?q=${encodeURIComponent(subject.name + ' ' + subject.topic)}+filetype:pdf`
+        });
+      }
+
       res.json(resources);
     } catch (error) {
       console.warn('AI Resource Generation Failed, using fallback:', error);

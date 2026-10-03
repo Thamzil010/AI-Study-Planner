@@ -163,11 +163,12 @@ export const generateSchedule = async (req: Request, res: Response) => {
       subjectsMap[task.subjectName] = subject;
     }
 
+    const crossesMidnight = (payload.studyEndTime || '22:00') < (payload.studyStartTime || '08:00');
     const prompt = `
     You are an expert AI Study Planner. Create a 1-day study schedule for a student for the date ${payload.date}.
     
     Student Time Constraints:
-    - Study Window: ${payload.studyStartTime || '08:00'} to ${payload.studyEndTime || '22:00'} (24-hour format)
+    - Study Window: ${payload.studyStartTime || '08:00'} to ${payload.studyEndTime || '22:00'} (24-hour format). ${crossesMidnight ? 'NOTE: This time window crosses midnight into the next day. You must continue scheduling past 23:59 into 00:00.' : ''}
     - Working Hours: ${payload.workingHours ? `${payload.workingHours.start} to ${payload.workingHours.end}` : 'None'} (24-hour format)
     - Total Study Target: ${payload.totalStudyHours || 4} hours
 
@@ -250,14 +251,35 @@ export const generateSchedule = async (req: Request, res: Response) => {
       data: { userId, date: scheduleDate }
     });
 
+    const studyStartH = Number((payload.studyStartTime || '08:00').split(':')[0]);
+
     const sessionsToCreate = sessionData.map((session: any) => {
-      const [startH, startM] = session.startTime.split(':').map(Number);
-      const [endH, endM] = session.endTime.split(':').map(Number);
+      let [startH, startM] = session.startTime.split(':').map(Number);
+      let [endH, endM] = session.endTime.split(':').map(Number);
       
+      if (isNaN(startH)) startH = 0;
+      if (isNaN(startM)) startM = 0;
+      if (isNaN(endH)) endH = 0;
+      if (isNaN(endM)) endM = 0;
+      
+      let startDayOffset = 0;
+      let endDayOffset = 0;
+
+      if (crossesMidnight) {
+        if (startH < studyStartH) startDayOffset = 1;
+        if (endH < studyStartH) endDayOffset = 1;
+      }
+      
+      if (endH < startH && startDayOffset === endDayOffset) {
+        endDayOffset += 1;
+      }
+
       const startTime = new Date(scheduleDate);
+      startTime.setDate(startTime.getDate() + startDayOffset);
       startTime.setUTCHours(startH, startM, 0, 0);
       
       const endTime = new Date(scheduleDate);
+      endTime.setDate(endTime.getDate() + endDayOffset);
       endTime.setUTCHours(endH, endM, 0, 0);
 
       return {

@@ -14,8 +14,6 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
-@media print { aside { display: none !important; } #report-actions { display: none !important; } main { width: 100% !important; margin: 0 !important; padding: 0 !important; } @page { margin: 1cm; } }
-
 @media print {
   aside { display: none !important; }
   #report-actions { display: none !important; }
