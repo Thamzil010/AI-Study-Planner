@@ -31,13 +31,7 @@ export const getReports = async (req: Request, res: Response) => {
         if (session.type === 'STUDY' && session.subjectId) {
           totalPlannedMinutes += session.durationMinutes;
           
-          let sessionCompletedMinutes = 0;
-          if (session.status === 'COMPLETED') {
-            sessionCompletedMinutes = session.actualDuration || session.durationMinutes;
-          } else {
-            sessionCompletedMinutes = session.actualDuration || 0;
-          }
-          
+          let sessionCompletedMinutes = session.actualDuration ?? 0;
           totalCompletedMinutes += sessionCompletedMinutes;
 
           const key = `${session.subjectId}_${session.topic}`;
@@ -57,15 +51,17 @@ export const getReports = async (req: Request, res: Response) => {
       });
 
       const subjectsDetails = Array.from(subjectsMap.values()).map(subject => {
+        let remainingMinutes = Math.max(subject.plannedMinutes - subject.completedMinutes, 0);
         let progress = subject.plannedMinutes > 0 ? (subject.completedMinutes / subject.plannedMinutes) * 100 : 0;
         progress = Math.min(100, Math.round(progress)); 
         
         let status = 'Not Completed';
         if (progress >= 100) status = 'Completed';
-        else if (progress > 0) status = 'Partially Completed';
+        else if (progress > 0) status = 'In Progress';
 
         return {
           ...subject,
+          remainingMinutes,
           progress,
           status
         };

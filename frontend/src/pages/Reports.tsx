@@ -10,6 +10,7 @@ interface SubjectDetail {
   topic: string;
   plannedMinutes: number;
   completedMinutes: number;
+  remainingMinutes: number;
   progress: number;
   status: string;
 }
@@ -98,13 +99,14 @@ const Reports: React.FC = () => {
       sub.topic,
       formatDuration(sub.plannedMinutes),
       formatDuration(sub.completedMinutes),
+      formatDuration(sub.remainingMinutes),
       `${sub.progress}%`,
       sub.status
     ]);
 
     autoTable(doc, {
       startY: 120,
-      head: [['Subject', 'Topic', 'Planned', 'Completed', 'Progress', 'Status']],
+      head: [['Subject', 'Topic', 'Planned', 'Actually Studied', 'Remaining', 'Progress', 'Status']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [37, 99, 235] },
@@ -254,7 +256,8 @@ const Reports: React.FC = () => {
                         <th className="p-4 font-bold text-gray-700">Subject</th>
                         <th className="p-4 font-bold text-gray-700">Topic</th>
                         <th className="p-4 font-bold text-gray-700">Planned</th>
-                        <th className="p-4 font-bold text-gray-700">Completed</th>
+                        <th className="p-4 font-bold text-gray-700">Actually Studied</th>
+                        <th className="p-4 font-bold text-gray-700">Remaining</th>
                         <th className="p-4 font-bold text-gray-700">Progress</th>
                         <th className="p-4 font-bold text-gray-700">Status</th>
                       </tr>
@@ -266,6 +269,7 @@ const Reports: React.FC = () => {
                           <td className="p-4 text-gray-600">{sub.topic}</td>
                           <td className="p-4 text-gray-600 font-medium">{formatDuration(sub.plannedMinutes)}</td>
                           <td className="p-4 text-gray-600 font-medium">{formatDuration(sub.completedMinutes)}</td>
+                          <td className="p-4 text-gray-600 font-medium">{formatDuration(sub.remainingMinutes)}</td>
                           <td className="p-4">
                             <div className="flex items-center gap-2">
                               <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -322,6 +326,10 @@ const Reports: React.FC = () => {
                         <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                           <p className="text-xs text-gray-500 mb-1">Actual Time</p>
                           <p className="font-bold text-gray-800">{formatDuration(sub.completedMinutes)}</p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 col-span-2">
+                          <p className="text-xs text-gray-500 mb-1">Remaining Time</p>
+                          <p className="font-bold text-gray-800">{formatDuration(sub.remainingMinutes)}</p>
                         </div>
                       </div>
 
